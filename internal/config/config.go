@@ -1,21 +1,27 @@
 package config
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/devKiratu/gator/internal/database"
+	"github.com/google/uuid"
 )
 
 const configFileName = ".gatorconfig.json"
 
-
 type Config struct {
-	DbUrl string `json:"db_url"`
+	DbUrl           string `json:"db_url"`
 	CurrentUserName string `json:"current_user_name"`
 }
 
 type state struct {
+	db     *database.Queries
 	config *Config
 }
 
@@ -31,11 +37,11 @@ type commands struct {
 func getCommands() commands {
 	return commands{
 		Data: map[string]func(*state, command) error{
-			"login": handlerLogin,
+			"login":    handlerLogin,
+			"register": handlerRegister,
 		},
 	}
 }
-
 
 func (c *commands) run(s *state, cmd command) error {
 	found, ok := c.Data[cmd.name]
@@ -49,7 +55,7 @@ func (c *commands) run(s *state, cmd command) error {
 	return nil
 }
 
-func (c *commands) register(name string, f func(*state, command)error) {
+func (c *commands) register(name string, f func(*state, command) error) {
 	c.Data[name] = f
 }
 
@@ -59,7 +65,7 @@ func (c *Config) SetUser(user string) error {
 	if err != nil {
 		return err
 	}
-	data, err:= json.Marshal(c)
+	data, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
@@ -87,10 +93,10 @@ func Read() (Config, error) {
 	return c, nil
 }
 
-func getConfigFilePath ()(string, error) {
+func getConfigFilePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return  "", err
+		return "", err
 	}
 	filePath := home + "/" + configFileName
 	return filePath, nil
@@ -112,14 +118,41 @@ func handlerLogin(s *state, cmd command) error {
 	return nil
 }
 
+func handlerRegister(s *state, cmd command) error {
+	if len(cmd.args) < 3 {
+		return fmt.Errorf("a username is required")
+	}
+	if len(cmd.args) > 3 {
+		return fmt.Errorf("login command expects a single argument, the username")
+	}
+	user, err := s.db.CreateUser(context.Background(), database.CreateUserParams{
+		ID: uuid.New(), CreatedAt: time.Now(), UpdatedAt: time.Now(), Name: cmd.args[2]})
+	if err != nil {
+		return fmt.Errorf("error registering user: %w", err)
+	}
+	err = s.config.SetUser(cmd.args[2])
+	if err != nil {
+		return fmt.Errorf("error setting current user: %w", err)
+	}
+	fmt.Printf("User created: %+v\n", user)
+	return nil
+}
 
 func StartGator() {
 	data, err := Read()
 	if err != nil {
 		fmt.Println("Error reading file: %w", err)
 	}
+	//db connection
+	db, err := sql.Open("postgres", data.DbUrl)
+	if err != nil {
+		fmt.Println("Error establishing db connection", err)
+		os.Exit(1)
+	}
+	dbQueries := database.New(db)
 	// fmt.Printf("BEFORE: %+v", data)
 	state := state{
+		db:     dbQueries,
 		config: &data,
 	}
 
@@ -136,6 +169,6 @@ func StartGator() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	
+
 	// fmt.Printf("AFTER: %+v", state.config)
 }
