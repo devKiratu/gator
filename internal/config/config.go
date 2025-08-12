@@ -40,6 +40,7 @@ func getCommands() commands {
 			"login":    handlerLogin,
 			"register": handlerRegister,
 			"reset":    handlerResetUsers,
+			"users":    handlerGetUsers,
 		},
 	}
 }
@@ -144,6 +145,21 @@ func handlerRegister(s *state, cmd command) error {
 		return fmt.Errorf("error setting current user: %w", err)
 	}
 	fmt.Printf("User created: %+v\n", user)
+	return nil
+}
+
+func handlerGetUsers(s *state, cmd command) error {
+	users, err := s.db.GetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("error fetching users: %w", err)
+	}
+	for _, user := range users {
+		if user.Name == s.config.CurrentUserName {
+			fmt.Printf("* %s (current)\n", user.Name)
+		} else {
+			fmt.Printf("* %s\n", user.Name)
+		}
+	}
 	return nil
 }
 
