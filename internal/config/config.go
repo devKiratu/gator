@@ -39,6 +39,7 @@ func getCommands() commands {
 		Data: map[string]func(*state, command) error{
 			"login":    handlerLogin,
 			"register": handlerRegister,
+			"reset":    handlerResetUsers,
 		},
 	}
 }
@@ -143,6 +144,15 @@ func handlerRegister(s *state, cmd command) error {
 		return fmt.Errorf("error setting current user: %w", err)
 	}
 	fmt.Printf("User created: %+v\n", user)
+	return nil
+}
+
+func handlerResetUsers(s *state, cmd command) error {
+	err := s.db.ResetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("error resetting users table: %w", err)
+	}
+	fmt.Println("Reset successful!")
 	return nil
 }
 
