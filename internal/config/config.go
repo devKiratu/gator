@@ -110,7 +110,15 @@ func handlerLogin(s *state, cmd command) error {
 	if len(cmd.args) > 3 {
 		return fmt.Errorf("login command expects a single argument, the username")
 	}
-	err := s.config.SetUser(cmd.args[2])
+	// check if user exists in db
+	user, err := s.db.GetUser(context.Background(), cmd.args[2])
+	if err != nil {
+		return fmt.Errorf("error fetching user: %w", err)
+	}
+	if user.Name == "" {
+		return fmt.Errorf("account %s doesn't exist", cmd.args[2])
+	}
+	err = s.config.SetUser(cmd.args[2])
 	if err != nil {
 		return fmt.Errorf("error setting current user: %w", err)
 	}
