@@ -5,9 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html"
 	"os"
 	"strings"
 	"time"
+
+	"encoding/xml"
+	"io"
+	"net/http"
 
 	"github.com/devKiratu/gator/internal/database"
 	"github.com/google/uuid"
@@ -41,6 +46,7 @@ func getCommands() commands {
 			"register": handlerRegister,
 			"reset":    handlerResetUsers,
 			"users":    handlerGetUsers,
+			"agg":      handlerAgg,
 		},
 	}
 }
@@ -205,4 +211,81 @@ func StartGator() {
 	}
 
 	// fmt.Printf("AFTER: %+v", state.config)
+}
+
+/* RSS Stuff. to move to own package */
+
+type RSSFeed struct {
+	Channel struct {
+		Title       string    `xml:"title"`
+		Link        string    `xml:"link"`
+		Description string    `xml:"description"`
+		Item        []RSSItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
+}
+
+func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+	// init request
+	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
+	if err != nil {
+		return &RSSFeed{}, err
+	}
+
+	// set headers
+	req.Header.Set("User-Agent", "gator")
+
+	client := &http.Client{}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return &RSSFeed{}, err
+	}
+
+	defer res.Body.Close()
+
+	// transform data
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return &RSSFeed{}, err
+	}
+	var feed RSSFeed
+	err = xml.Unmarshal(data, &feed)
+	if err != nil {
+		return &feed, err
+	}
+	// fmt.Println("========= DONE FETCHING =========", feed)
+	var transformed RSSFeed
+	transformed.Channel.Title = html.UnescapeString(feed.Channel.Title)
+	transformed.Channel.Description = html.UnescapeString(feed.Channel.Description)
+	transformed.Channel.Link = feed.Channel.Link
+	// fmt.Println("=================.> The blog has guess how many items: ", len(feed.Channel.Item))
+	tItems := make([]RSSItem, len(feed.Channel.Item))
+	for i, item := range feed.Channel.Item {
+		tItems[i] = RSSItem{
+			Title:       html.UnescapeString(item.Title),
+			Description: html.UnescapeString(item.Description),
+			Link:        item.Link,
+			PubDate:     item.PubDate,
+		}
+	}
+	transformed.Channel.Item = tItems
+	return &transformed, nil
+
+}
+
+func handlerAgg(s *state, cmd command) error {
+	feedUrl := "https://www.wagslane.dev/index.xml"
+	data, err := fetchFeed(context.Background(), feedUrl)
+	if err != nil {
+		return fmt.Errorf("error fetching rss feed: %w", err)
+	}
+	fmt.Println(data)
+	return nil
 }
