@@ -47,11 +47,13 @@ func getCommands() commands {
 			"reset":    handlerResetUsers,
 			"users":    handlerGetUsers,
 			"agg":      handlerAgg,
+			"addfeed":  handlerAddFeed,
 		},
 	}
 }
 
 func (c *commands) run(s *state, cmd command) error {
+	// fmt.Println("[DEBUG]=== testing the command: ", cmd.name)
 	found, ok := c.Data[cmd.name]
 	if !ok {
 		return fmt.Errorf("unkown command: %s", cmd.name)
@@ -287,5 +289,32 @@ func handlerAgg(s *state, cmd command) error {
 		return fmt.Errorf("error fetching rss feed: %w", err)
 	}
 	fmt.Println(data)
+	return nil
+}
+
+/* Feed */
+func handlerAddFeed(s *state, cmd command) error {
+	if len(cmd.args) < 4 {
+
+		return fmt.Errorf("feed name and feed url are required")
+	}
+	feedName := cmd.args[2]
+	feedUrl := cmd.args[3]
+	user, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
+	if err != nil {
+		return fmt.Errorf("error fetcing current user's details: %w", err)
+	}
+	feedItem, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      feedName,
+		Url:       feedUrl,
+		UserID:    user.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("error creating feed: %w", err)
+	}
+	fmt.Printf("%+v\n", feedItem)
 	return nil
 }
