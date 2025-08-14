@@ -48,6 +48,7 @@ func getCommands() commands {
 			"users":    handlerGetUsers,
 			"agg":      handlerAgg,
 			"addfeed":  handlerAddFeed,
+			"feeds":    handlerGetFeeds,
 		},
 	}
 }
@@ -316,5 +317,14 @@ func handlerAddFeed(s *state, cmd command) error {
 		return fmt.Errorf("error creating feed: %w", err)
 	}
 	fmt.Printf("%+v\n", feedItem)
+	return nil
+}
+
+func handlerGetFeeds(s *state, cmd command) error {
+	feeds, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return fmt.Errorf("error fetching feeds: %w", err)
+	}
+	fmt.Printf("%+v\n", feeds)
 	return nil
 }
